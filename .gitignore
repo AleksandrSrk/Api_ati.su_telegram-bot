@@ -1,0 +1,25 @@
+# Виртуальные окружения
+.venv/
+venv/
+env/
+
+# Кэш и служебное
+__pycache__/
+*.py[cod]
+*.log
+
+# Конфиги с секретами
+.env
+.env.*
+config.py  # если хочешь держать config.py локальным и выложить только config.py.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Большие/служебные файлы
+cities.json
+.DS_Store
+Thumbs.db
