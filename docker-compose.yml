@@ -1,0 +1,9 @@
+version: "3.9"
+
+services:
+  ati-bot:
+    build: .
+    container_name: ati-bot
+    restart: always
+    env_file:
+      - .env
