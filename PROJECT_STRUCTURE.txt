@@ -1,0 +1,30 @@
+Структура папок
+Серийный номер тома: 9C32-2658
+D:.
+|   .env
+|   .gitignore
+|   ati_client.py
+|   check_contacts.py
+|   cities.json
+|   config.py
+|   docker-compose.yml
+|   Dockerfile
+|   fetch_cities.py
+|   LICENSE
+|   main.py
+|   PROJECT_STRUCTURE.txt
+|   README.md
+|   requirements.txt
+|   scheduler.py
+|   state.py
+|   telegram_bot.py
+|   
++---.github
+|       copilot-instructions.md
+|       
+        ati_client.cpython-310.pyc
+        config.cpython-310.pyc
+        scheduler.cpython-310.pyc
+        state.cpython-310.pyc
+        telegram_bot.cpython-310.pyc
+        

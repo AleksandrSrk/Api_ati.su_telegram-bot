@@ -1,3 +1,8 @@
+# =============================================
+# ati_client.py
+# Работа с API ATI.SU
+# =============================================
+
 import httpx
 import json
 import os
@@ -6,18 +11,26 @@ from config import MANAGERS
 ATI_BASE_URL = "https://api.ati.su"
 TIMEOUT = 20.0
 
+# =============================================
+# Загрузка городов
+# =============================================
+
 _CITIES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cities.json")
 _CITY_NAMES: dict[str, str] = {}
 
 try:
     with open(_CITIES_FILE, "r", encoding="utf-8") as f:
         _CITY_NAMES = json.load(f)
-    print(f"[Cities] Загружено {len(_CITY_NAMES)} городов из cities.json")
+    print(f"[Cities] Загружено {len(_CITY_NAMES)} городов")
 except FileNotFoundError:
-    print("[Cities] ВНИМАНИЕ: cities.json не найден! Запусти fetch_cities.py")
+    print("[Cities] ВНИМАНИЕ: cities.json не найден!")
 except Exception as e:
     print(f"[Cities] Ошибка загрузки cities.json: {e}")
 
+
+# =============================================
+# Общие утилиты
+# =============================================
 
 def get_headers(manager_key: str) -> dict:
     return {
@@ -32,6 +45,10 @@ def city_name(city_id) -> str:
     return _CITY_NAMES.get(str(city_id), f"г.{city_id}")
 
 
+# =============================================
+# Парсинг груза
+# =============================================
+
 def parse_load(load: dict) -> dict:
     load_id = load.get("Id", "")
     load_number = load.get("LoadNumber", "")
@@ -44,13 +61,16 @@ def parse_load(load: dict) -> dict:
 
     cargo = load.get("Cargo") or {}
     weight = cargo.get("Weight")
+
     if weight is None:
         cargos_list = loading.get("LoadingCargos") or []
         if cargos_list:
             weight = cargos_list[0].get("Weight")
+
     weight = weight if weight is not None else "—"
 
     cargo_name = cargo.get("CargoTypeName") or cargo.get("Name") or ""
+
     if not cargo_name:
         cargos_list = loading.get("LoadingCargos") or []
         if cargos_list:
@@ -70,13 +90,21 @@ def parse_load(load: dict) -> dict:
     }
 
 
+# =============================================
+# Безопасный JSON
+# =============================================
+
 async def safe_json(response: httpx.Response):
     try:
         return response.json()
     except Exception:
-        print(f"[ATI] Ошибка JSON: {response.text[:500]}")
+        print(f"[ATI] Ошибка JSON: {response.text[:300]}")
         return None
 
+
+# =============================================
+# Получение МОИХ грузов (исправленная логика)
+# =============================================
 
 async def get_my_loads(manager_key: str) -> list:
     url = f"{ATI_BASE_URL}/v1.0/loads"
@@ -96,14 +124,33 @@ async def get_my_loads(manager_key: str) -> list:
     if not data:
         return []
 
-    all_loads = data if isinstance(data, list) else data.get("loads", [])
+    # 👉 Получаем список всех грузов
+    loads = data if isinstance(data, list) else data.get("loads", [])
+
+    print(f"[{manager_key}] всего грузов: {len(loads)}")
+
+    # =============================================
+    # 🔥 ФИЛЬТР ПО contact_id (ключевой фикс)
+    # =============================================
 
     manager_contact_id = MANAGERS[manager_key].get("contact_id")
-    if manager_contact_id:
-        return [l for l in all_loads if l.get("ContactId1") == manager_contact_id]
 
-    return all_loads
+    if manager_contact_id is not None:
+        filtered_loads = [
+            load for load in loads
+            if str(load.get("ContactId1")) == str(manager_contact_id)
+        ]
 
+        print(f"[{manager_key}] после фильтра: {len(filtered_loads)}")
+
+        return filtered_loads
+
+    return loads
+
+
+# =============================================
+# Получение откликов
+# =============================================
 
 async def get_load_responses(manager_key: str, load_id: str) -> list:
     url = f"{ATI_BASE_URL}/v1.0/loads/{load_id}/responses"
@@ -128,6 +175,10 @@ async def get_load_responses(manager_key: str, load_id: str) -> list:
     )
 
 
+# =============================================
+# Обновление груза
+# =============================================
+
 async def renew_load(manager_key: str, load_id: str) -> dict:
     url = f"{ATI_BASE_URL}/v1.0/loads/{load_id}/renew"
 
@@ -145,8 +196,9 @@ async def renew_load(manager_key: str, load_id: str) -> dict:
 
     data = await safe_json(response)
     reason = None
+
     if data:
-        reason = data.get("Reason") or data.get("reason") or data.get("error")
+        reason = data.get("Reason") or data.get("error")
 
     return {
         "success": False,
@@ -154,6 +206,10 @@ async def renew_load(manager_key: str, load_id: str) -> dict:
         "reason": reason or response.text,
     }
 
+
+# =============================================
+# Новые отклики
+# =============================================
 
 async def get_new_responses(manager_key: str) -> list:
     url = f"{ATI_BASE_URL}/v1.0/loads/new-responses"
