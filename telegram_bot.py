@@ -310,11 +310,16 @@ async def notify_new_response(manager_key: str, load: dict, new_responses: list)
         phone_link = phone.replace(" ", "").replace("(", "").replace(")", "").replace("-", "")
 
         # 💰 СТАВКА (ВАЖНО)
-        price_value = r.get("Price")
-        if price_value:
-            is_nds = bool(r.get("PayAttributes", 0) & 2)
-            nds_text = "с НДС" if is_nds else "без НДС"
-            price = f"{int(price_value):,} ₽ ({nds_text})"
+        nds_price = r.get("NdsPrice", 0)
+        not_nds_price = r.get("NotNdsPrice", 0)
+        price_value = r.get("Price", 0)
+
+        if nds_price and nds_price > 0:
+            price = f"{int(nds_price):,} ₽ (с НДС)"
+        elif not_nds_price and not_nds_price > 0:
+            price = f"{int(not_nds_price):,} ₽ (без НДС)"
+        elif price_value and price_value > 0:
+            price = f"{int(price_value):,} ₽"
         else:
             price = "—"
 
@@ -380,11 +385,16 @@ async def show_responses(callback: CallbackQuery):
         phone_link = phone.replace(" ", "").replace("(", "").replace(")", "").replace("-", "")
 
         # 💰 СТАВКА
-        price_value = r.get("Price")
-        if price_value:
-            is_nds = bool(r.get("PayAttributes", 0) & 2)
-            nds_text = "с НДС" if is_nds else "без НДС"
-            price = f"{int(price_value):,} ₽ ({nds_text})"
+        nds_price = r.get("NdsPrice", 0)
+        not_nds_price = r.get("NotNdsPrice", 0)
+        price_value = r.get("Price", 0)
+
+        if nds_price and nds_price > 0:
+            price = f"{int(nds_price):,} ₽ (с НДС)"
+        elif not_nds_price and not_nds_price > 0:
+            price = f"{int(not_nds_price):,} ₽ (без НДС)"
+        elif price_value and price_value > 0:
+            price = f"{int(price_value):,} ₽"
         else:
             price = "—"
 
@@ -444,11 +454,16 @@ async def all_responses(callback: CallbackQuery):
         phone_link = phone.replace(" ", "").replace("(", "").replace(")", "").replace("-", "")
 
         # 💰 СТАВКА
-        price_value = r.get("Price")
-        if price_value:
-            is_nds = bool(r.get("PayAttributes", 0) & 2)
-            nds_text = "с НДС" if is_nds else "без НДС"
-            price = f"{int(price_value):,} ₽ ({nds_text})"
+        nds_price = r.get("NdsPrice", 0)
+        not_nds_price = r.get("NotNdsPrice", 0)
+        price_value = r.get("Price", 0)
+
+        if nds_price and nds_price > 0:
+            price = f"{int(nds_price):,} ₽ (с НДС)"
+        elif not_nds_price and not_nds_price > 0:
+            price = f"{int(not_nds_price):,} ₽ (без НДС)"
+        elif price_value and price_value > 0:
+            price = f"{int(price_value):,} ₽"
         else:
             price = "—"
 
