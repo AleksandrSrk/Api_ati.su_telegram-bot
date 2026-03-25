@@ -1,5 +1,3 @@
-# scheduler.py
-
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from config import MANAGERS, UPDATE_INTERVAL_MINUTES
@@ -14,11 +12,14 @@ scheduler = AsyncIOScheduler()
 
 
 async def update_loads_job(manager_key: str):
-    """Автообновление грузов — раз в час"""
+    """
+    Автообновление грузов
+    """
+
     if not is_auto_update_enabled(manager_key):
         return
 
-    print(f"[{manager_key}] Автообновление грузов...")
+    print(f"[{manager_key}] автообновление грузов")
 
     loads_raw = await get_my_loads(manager_key)
     if not loads_raw:
@@ -28,22 +29,25 @@ async def update_loads_job(manager_key: str):
 
     for load_raw in loads_raw:
         load = parse_load(load_raw)
+
         if not load["can_renew"]:
             results.append({
                 "success": False,
                 "from_city": load["from_city"],
                 "to_city": load["to_city"],
                 "weight": load["weight"],
-                "reason": load["renew_restriction"] or "Ещё не прошёл час",
+                "reason": load["renew_restriction"] or "ещё не прошёл час",
                 "load_id": load["id"],
             })
             continue
 
         result = await renew_load(manager_key, load["id"])
-        result["from_city"] = load["from_city"]
-        result["to_city"] = load["to_city"]
-        result["weight"] = load["weight"]
-        result["load_id"] = load["id"]
+        result.update({
+            "from_city": load["from_city"],
+            "to_city": load["to_city"],
+            "weight": load["weight"],
+            "load_id": load["id"],
+        })
         results.append(result)
 
     set_last_update_time(manager_key)
@@ -54,10 +58,7 @@ async def update_loads_job(manager_key: str):
 
 async def check_responses_job(manager_key: str):
     """
-    Проверка новых откликов каждые 3 минуты.
-
-    Первый запуск: просто запоминаем все текущие ResponseId и ничего не шлём.
-    Следующие запуски: шлём уведомления только по новым откликам.
+    Проверка новых откликов
     """
 
     loads_raw = await get_my_loads(manager_key)
@@ -66,35 +67,33 @@ async def check_responses_job(manager_key: str):
 
     known = get_known_responses(manager_key)
 
-    # Первый запуск для этого менеджера — инициализация known_responses
+    # первый запуск — просто запоминаем всё
     if not is_responses_initialized(manager_key):
+
         for load_raw in loads_raw:
             load = parse_load(load_raw)
-            load_id = load["id"]
 
-            # пропускаем грузы без откликов
             if load.get("response_count", 0) == 0:
                 continue
 
-            responses = await get_load_responses(manager_key, load_id)
+            responses = await get_load_responses(manager_key, load["id"])
             if not responses:
                 continue
 
             for r in responses:
                 rid = r.get("ResponseId")
                 if rid:
-                    add_known_response(manager_key, load_id, rid)
+                    add_known_response(manager_key, load["id"], rid)
 
         set_responses_initialized(manager_key)
-        print(f"[{manager_key}] known_responses инициализированы, уведомления включены со следующего цикла.")
+        print(f"[{manager_key}] инициализация завершена")
         return
 
-    # Обычный режим — ищем новые отклики
+    # обычный режим
     for load_raw in loads_raw:
         load = parse_load(load_raw)
         load_id = load["id"]
 
-        # Пропускаем если нет откликов вообще
         if load.get("response_count", 0) == 0:
             continue
 
@@ -103,26 +102,29 @@ async def check_responses_job(manager_key: str):
             continue
 
         known_ids = set(known.get(load_id, []))
-        new_responses = [r for r in responses if r.get("ResponseId") not in known_ids]
+
+        new_responses = [
+            r for r in responses
+            if r.get("ResponseId") not in known_ids
+        ]
 
         if not new_responses:
             continue
 
-        # Есть новые — обновляем known и шлём уведомление
         for r in new_responses:
             rid = r.get("ResponseId")
             if rid:
                 add_known_response(manager_key, load_id, rid)
 
         from telegram_bot import notify_new_response
-        await notify_new_response(manager_key, load, responses, new_responses)
+        await notify_new_response(manager_key, load, new_responses)
 
 
 def start_scheduler():
     from datetime import datetime, timedelta
 
     for manager_key in MANAGERS.keys():
-        # Автообновление грузов
+
         scheduler.add_job(
             update_loads_job,
             trigger="interval",
@@ -132,7 +134,6 @@ def start_scheduler():
             next_run_time=datetime.now() + timedelta(hours=1),
         )
 
-        # Проверка новых откликов — каждые 3 минуты
         scheduler.add_job(
             check_responses_job,
             trigger="interval",
@@ -143,4 +144,4 @@ def start_scheduler():
         )
 
     scheduler.start()
-    print("[Scheduler] Запущен. Автообновление — выключено до нажатия кнопки.")
+    print("scheduler запущен")
