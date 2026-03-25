@@ -15,7 +15,7 @@ from state import (
     get_active_manager, set_active_manager,
 )
 from ati_client import get_my_loads, get_load_responses, renew_load, parse_load
-
+from ati_client import delete_load
 
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
@@ -29,9 +29,10 @@ def main_keyboard(manager_key: str):
 
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="📋 Мои грузы"), KeyboardButton(text="⏱ До обновления")],
+            [KeyboardButton(text="📋 Мои грузы")],
             [KeyboardButton(text="Автообновление: ВКЛ" if auto else "Автообновление: ВЫКЛ")],
-            [KeyboardButton(text="🔄 Обновить грузы вручную"), KeyboardButton(text="👤 Сменить менеджера")],
+            # [KeyboardButton(text="🔄 Обновить грузы вручную"), 
+            [KeyboardButton(text="👤 Сменить менеджера")],
         ],
         resize_keyboard=True
     )
@@ -57,6 +58,7 @@ async def start(message: Message):
 
 @dp.callback_query(F.data.startswith("m_"))
 async def select_manager(callback: CallbackQuery):
+    await callback.answer("Загружаю...")
     key = callback.data.replace("m_", "")
     set_active_manager(callback.message.chat.id, key)
 
@@ -65,7 +67,23 @@ async def select_manager(callback: CallbackQuery):
         reply_markup=main_keyboard(key)
     )
 
+# =========================================================
+# архив
+# =========================================================
+@dp.callback_query(F.data.startswith("archive_"))
+async def archive_load_handler(callback: CallbackQuery):
+    await callback.answer("Убираем в архив...")
+    
+    load_id = callback.data.replace("archive_", "")
+    manager = get_active_manager(callback.message.chat.id)
 
+    result = await delete_load(manager, load_id)
+
+    if result["success"]:
+        await callback.message.answer("🗄 Груз убран (архив)")
+    else:
+        await callback.message.answer(f"❌ Ошибка: {result.get('reason')}")
+        
 # =========================================================
 # МОИ ГРУЗЫ (ПОДРОБНО)
 # =========================================================
@@ -75,6 +93,7 @@ async def loads_handler(message: Message):
 
     manager = get_active_manager(message.chat.id)
     if not manager:
+        await message.answer("Сначала выбери менеджера")
         return
 
     loads = await get_my_loads(manager)
@@ -83,23 +102,53 @@ async def loads_handler(message: Message):
         await message.answer("Нет грузов")
         return
 
-    lines = [f"📋 Активные грузы {MANAGERS[manager]['name']}:\n"]
-
-    for i, l in enumerate(loads, 1):
+    for l in loads:
         load = parse_load(l)
 
-        renew_icon = "🟡" if load["can_renew"] else "⏳"
         weight = f"{load['weight']}т" if load["weight"] != "—" else "—"
 
-        lines.append(f"{i}) {renew_icon} {load['from_city']} → {load['to_city']}, {weight}")
+        # 🔥 получаем отклики и фильтруем только актуальные
+        responses = await get_load_responses(manager, load["id"])
 
+        actual_count = 0
+        if responses:
+            actual_count = len([
+                r for r in responses
+                if not r.get("IsOutdated")
+            ])
+
+        text = (
+            f"{load['from_city']} → {load['to_city']}\n"
+            f"Вес: {weight}\n"
+            f"💬 Откликов: {actual_count}\n"
+        )
+
+        # ⏳ если нельзя обновить — показываем причину
         if not load["can_renew"]:
-            lines.append(f"   {load['renew_restriction']}")
+            text += f"\n⏳ {load['renew_restriction']}"
 
-        resp_count = load.get("response_count", 0)
-        lines.append(f"   💬 Откликов: {resp_count}\n")
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🔄 Обновить",
+                        callback_data=f"renew_{load['id']}"
+                    ),
+                    InlineKeyboardButton(
+                        text="💬 Отклики",
+                        callback_data=f"responses_{load['id']}"
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🗄 В архив",
+                        callback_data=f"archive_{load['id']}"
+                    )
+                ]
+            ]
+        )
 
-    await message.answer("\n".join(lines))
+        await message.answer(text, reply_markup=keyboard)
 
 
 # =========================================================
@@ -187,16 +236,37 @@ async def manual_update(message: Message):
 
 @dp.callback_query(F.data.startswith("renew_"))
 async def renew_one(callback: CallbackQuery):
+    await callback.answer("Обновляем...")
 
     load_id = callback.data.replace("renew_", "")
     manager = get_active_manager(callback.message.chat.id)
 
+    loads = await get_my_loads(manager)
+
+    load = None
+    for l in loads:
+        parsed = parse_load(l)
+        if parsed["id"] == load_id:
+            load = parsed
+            break
+
+    if not load:
+        await callback.message.answer("Груз не найден")
+        return
+
+    # 🔥 ключевая проверка
+    if not load["can_renew"]:
+        await callback.message.answer(
+            f"❌ Нельзя обновить\n{load['renew_restriction']}"
+        )
+        return
+
     result = await renew_load(manager, load_id)
 
     if result["success"]:
-        await callback.message.answer("Обновлено")
+        await callback.message.answer("✅ Груз обновлен")
     else:
-        await callback.message.answer("Ошибка обновления")
+        await callback.message.answer(f"❌ Ошибка: {result.get('reason')}")
 
 
 # =========================================================
@@ -220,26 +290,39 @@ async def notify_new_response(manager_key: str, load: dict, new_responses: list)
 
     lines = [
         "🔔 Новый отклик",
-        f"{load['from_city']} → {load['to_city']}\n"
+        f"{load['from_city']} → {load['to_city']}"
     ]
 
-    for r in new_responses:
+    for i, r in enumerate(new_responses, start=1):
+
+        if r.get("IsOutdated"):
+            continue
 
         firm = r.get("FirmInfo", {})
         contact = firm.get("Contact", {})
 
         company = firm.get("FullFirmName") or r.get("FirmName") or "—"
+        rating = firm.get("TotalScore")
+
         name = contact.get("Name") or "—"
         phone = contact.get("Mobile") or contact.get("Telephone") or "—"
 
-        if r.get("NdsPrice"):
-            price = f"{int(r['NdsPrice'])} ₽ с НДС"
-        elif r.get("NotNdsPrice"):
-            price = f"{int(r['NotNdsPrice'])} ₽ без НДС"
-        else:
-            price = "—"
+        phone_link = phone.replace(" ", "").replace("(", "").replace(")", "").replace("-", "")
 
-        lines.append(f"{company}\n{name}\n{phone}\n{price}\n")
+        # 💰 СТАВКА (ВАЖНО)
+        price_value = r.get("Price")
+        price = f"{int(price_value):,} ₽" if price_value else "—"
+
+        note = r.get("Note") or "—"
+        rating_text = f"⭐ {rating}" if rating else ""
+
+        lines.append(
+            f"<b>{i}.</b> {company} {rating_text}\n"
+            f"   👤 {name}\n"
+            f"   📞 <a href='tel:{phone_link}'>{phone}</a>\n"
+            f"   💰 {price}\n"
+            f"   💬 {note}"
+        )
 
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -250,8 +333,70 @@ async def notify_new_response(manager_key: str, load: dict, new_responses: list)
         ]
     )
 
-    await bot.send_message(chat_id, "\n".join(lines), reply_markup=keyboard)
+    await bot.send_message(
+        chat_id,
+        "\n".join(lines),
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
 
+# =========================================================
+# 
+# =========================================================
+@dp.callback_query(F.data.startswith("responses_"))
+async def show_responses(callback: CallbackQuery):
+    await callback.answer("Загружаю...")
+
+    load_id = callback.data.replace("responses_", "")
+    manager = get_active_manager(callback.message.chat.id)
+
+    responses = await get_load_responses(manager, load_id)
+
+    if not responses:
+        await callback.message.answer("Откликов нет")
+        return
+
+    lines = ["📋 Отклики:"]
+
+    for i, r in enumerate(responses, start=1):
+
+        if r.get("IsOutdated"):
+            continue
+
+        firm = r.get("FirmInfo", {})
+        contact = firm.get("Contact", {})
+
+        company = firm.get("FullFirmName") or r.get("FirmName") or "—"
+        rating = firm.get("TotalScore")
+
+        name = contact.get("Name") or "—"
+        phone = contact.get("Mobile") or contact.get("Telephone") or "—"
+
+        phone_link = phone.replace(" ", "").replace("(", "").replace(")", "").replace("-", "")
+
+        # 💰 СТАВКА
+        price_value = r.get("Price")
+        price = f"{int(price_value):,} ₽" if price_value else "—"
+
+        note = r.get("Note") or "—"
+        rating_text = f"⭐ {rating}" if rating else ""
+
+        lines.append(
+            f"<b>{i}.</b> {company} {rating_text}\n"
+            f"   👤 {name}\n"
+            f"   📞 <a href='tel:{phone_link}'>{phone}</a>\n"
+            f"   💰 {price}\n"
+            f"   💬 {note}"
+        )
+
+    if len(lines) == 1:
+        await callback.message.answer("Нет актуальных откликов")
+        return
+
+    await callback.message.answer(
+        "\n".join(lines),
+        parse_mode="HTML"
+    )
 
 # =========================================================
 # ВСЕ ОТКЛИКИ
@@ -259,6 +404,7 @@ async def notify_new_response(manager_key: str, load: dict, new_responses: list)
 
 @dp.callback_query(F.data.startswith("all_"))
 async def all_responses(callback: CallbackQuery):
+    await callback.answer("Загружаю...")
 
     load_id = callback.data.replace("all_", "")
     manager = get_active_manager(callback.message.chat.id)
@@ -269,23 +415,44 @@ async def all_responses(callback: CallbackQuery):
         await callback.message.answer("Нет откликов")
         return
 
-    lines = ["Все отклики:\n"]
+    lines = ["📋 Все отклики:\n"]
 
-    for r in responses:
+    for i, r in enumerate(responses, start=1):
+
+        if r.get("IsOutdated"):
+            continue
 
         firm = r.get("FirmInfo", {})
         contact = firm.get("Contact", {})
 
         company = firm.get("FullFirmName") or r.get("FirmName") or "—"
+        rating = firm.get("TotalScore")
+
         name = contact.get("Name") or "—"
+        phone = contact.get("Mobile") or contact.get("Telephone") or "—"
 
-        if r.get("NdsPrice"):
-            price = f"{int(r['NdsPrice'])} ₽ с НДС"
-        elif r.get("NotNdsPrice"):
-            price = f"{int(r['NotNdsPrice'])} ₽ без НДС"
-        else:
-            price = "—"
+        phone_link = phone.replace(" ", "").replace("(", "").replace(")", "").replace("-", "")
 
-        lines.append(f"{company} | {name} | {price}")
+        # 💰 СТАВКА
+        price_value = r.get("Price")
+        price = f"{int(price_value):,} ₽" if price_value else "—"
 
-    await callback.message.answer("\n".join(lines))
+        note = r.get("Note") or "—"
+        rating_text = f"⭐ {rating}" if rating else ""
+
+        lines.append(
+            f"<b>{i}.</b> {company} {rating_text}\n"
+            f"   👤 {name}\n"
+            f"   📞 <a href='tel:{phone_link}'>{phone}</a>\n"
+            f"   💰 {price}\n"
+            f"   💬 {note}"
+        )
+
+    if len(lines) == 1:
+        await callback.message.answer("Нет актуальных откликов")
+        return
+
+    await callback.message.answer(
+        "\n".join(lines),
+        parse_mode="HTML"
+    )

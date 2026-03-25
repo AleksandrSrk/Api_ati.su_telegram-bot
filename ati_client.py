@@ -46,6 +46,25 @@ def city_name(city_id) -> str:
 
 
 # =============================================
+# Груз в архив
+# =============================================
+async def delete_load(manager_key: str, load_id: str) -> dict:
+    url = f"{ATI_BASE_URL}/v1.0/loads/{load_id}"
+
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            response = await client.delete(url, headers=get_headers(manager_key))
+    except httpx.RequestError as e:
+        return {"success": False, "reason": str(e)}
+
+    if response.status_code in (200, 204):
+        return {"success": True}
+
+    return {
+        "success": False,
+        "reason": response.text
+    }
+# =============================================
 # Парсинг груза
 # =============================================
 
@@ -211,17 +230,26 @@ async def renew_load(manager_key: str, load_id: str) -> dict:
 # Новые отклики
 # =============================================
 
-async def get_new_responses(manager_key: str) -> list:
-    url = f"{ATI_BASE_URL}/v1.0/loads/new-responses"
+async def get_new_responses(manager_key: str, date_from: str) -> list:
+    url = f"{ATI_BASE_URL}/v1.0/loads/new/responses"
+
+    params = {
+        "dateFrom": date_from
+    }
 
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-            response = await client.get(url, headers=get_headers(manager_key))
+            response = await client.get(
+                url,
+                headers=get_headers(manager_key),
+                params=params
+            )
     except httpx.RequestError as e:
-        print(f"[ATI] Ошибка сети get_new_responses: {e}")
+        print(f"[ATI] ошибка new_responses: {e}")
         return []
 
     if response.status_code != 200:
+        print(f"[ATI] new_responses status: {response.status_code}")
         return []
 
     data = await safe_json(response)
@@ -231,4 +259,36 @@ async def get_new_responses(manager_key: str) -> list:
     if isinstance(data, list):
         return data
 
-    return data.get("responses") or data.get("counter_offers") or []
+    return data.get("responses") or []
+
+
+async def get_new_responses(manager_key: str, date_from: str) -> list:
+    url = f"{ATI_BASE_URL}/v1.0/loads/new/responses"
+
+    params = {
+        "dateFrom": date_from
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            response = await client.get(
+                url,
+                headers=get_headers(manager_key),
+                params=params
+            )
+    except httpx.RequestError as e:
+        print(f"[ATI] ошибка new_responses: {e}")
+        return []
+
+    if response.status_code != 200:
+        print(f"[ATI] new_responses status: {response.status_code}")
+        return []
+
+    data = await safe_json(response)
+    if not data:
+        return []
+
+    if isinstance(data, list):
+        return data
+
+    return data.get("responses") or []

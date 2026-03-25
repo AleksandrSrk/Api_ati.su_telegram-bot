@@ -65,3 +65,11 @@ def is_responses_initialized(manager_key: str) -> bool:
 
 def set_responses_initialized(manager_key: str):
     state[manager_key]["responses_initialized"] = True
+
+_last_response_check = {}
+
+def get_last_response_check(manager):
+    return _last_response_check.get(manager)
+
+def set_last_response_check(manager, dt):
+    _last_response_check[manager] = dt
