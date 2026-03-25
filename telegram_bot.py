@@ -311,7 +311,12 @@ async def notify_new_response(manager_key: str, load: dict, new_responses: list)
 
         # 💰 СТАВКА (ВАЖНО)
         price_value = r.get("Price")
-        price = f"{int(price_value):,} ₽" if price_value else "—"
+        if price_value:
+            is_nds = bool(r.get("PayAttributes", 0) & 2)
+            nds_text = "с НДС" if is_nds else "без НДС"
+            price = f"{int(price_value):,} ₽ ({nds_text})"
+        else:
+            price = "—"
 
         note = r.get("Note") or "—"
         rating_text = f"⭐ {rating}" if rating else ""
@@ -376,7 +381,12 @@ async def show_responses(callback: CallbackQuery):
 
         # 💰 СТАВКА
         price_value = r.get("Price")
-        price = f"{int(price_value):,} ₽" if price_value else "—"
+        if price_value:
+            is_nds = bool(r.get("PayAttributes", 0) & 2)
+            nds_text = "с НДС" if is_nds else "без НДС"
+            price = f"{int(price_value):,} ₽ ({nds_text})"
+        else:
+            price = "—"
 
         note = r.get("Note") or "—"
         rating_text = f"⭐ {rating}" if rating else ""
@@ -435,7 +445,12 @@ async def all_responses(callback: CallbackQuery):
 
         # 💰 СТАВКА
         price_value = r.get("Price")
-        price = f"{int(price_value):,} ₽" if price_value else "—"
+        if price_value:
+            is_nds = bool(r.get("PayAttributes", 0) & 2)
+            nds_text = "с НДС" if is_nds else "без НДС"
+            price = f"{int(price_value):,} ₽ ({nds_text})"
+        else:
+            price = "—"
 
         note = r.get("Note") or "—"
         rating_text = f"⭐ {rating}" if rating else ""
