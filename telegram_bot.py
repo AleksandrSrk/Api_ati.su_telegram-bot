@@ -17,6 +17,7 @@ from state import (
 from ati_client import get_my_loads, get_load_responses, renew_load, parse_load
 from ati_client import delete_load
 
+
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
@@ -302,12 +303,36 @@ async def notify_new_response(manager_key: str, load: dict, new_responses: list)
         contact = firm.get("Contact", {})
 
         company = firm.get("FullFirmName") or r.get("FirmName") or "—"
+
+        # 👉 получаем нормальный рейтинг через API
         rating = firm.get("TotalScore")
 
-        name = contact.get("Name") or "—"
-        phone = contact.get("Mobile") or contact.get("Telephone") or "—"
+        if rating is None:
+            rating_text = ""
+        else:
+            if rating >= 0:
+                rating_text = f"⭐ {rating:.1f}"
+            else:
+                rating_text = f"🔴 {-rating:.1f}"
 
-        phone_link = phone.replace(" ", "").replace("(", "").replace(")", "").replace("-", "")
+        name = contact.get("Name") or "—"
+        phone_raw = contact.get("Mobile") or contact.get("Telephone") or ""
+
+        phone_clean = (
+            phone_raw.replace(" ", "")
+            .replace("(", "")
+            .replace(")", "")
+            .replace("-", "")
+            .replace("+", "")  # 🔥 ВОТ ЭТО ВАЖНО
+        )
+
+        if phone_clean.startswith("8"):
+            phone_clean = "7" + phone_clean[1:]
+
+        if phone_clean:
+            phone = f"+{phone_clean}"
+        else:
+            phone = "—"
 
         # 💰 СТАВКА (ВАЖНО)
         nds_price = r.get("NdsPrice", 0)
@@ -319,17 +344,17 @@ async def notify_new_response(manager_key: str, load: dict, new_responses: list)
         elif not_nds_price and not_nds_price > 0:
             price = f"{int(not_nds_price):,} ₽ (без НДС)"
         elif price_value and price_value > 0:
-            price = f"{int(price_value):,} ₽"
+            price = f"{int(price_value):,} ₽ (без НДС)"
         else:
             price = "—"
 
         note = r.get("Note") or "—"
-        rating_text = f"⭐ {rating}" if rating else ""
+        # rating_text = f"⭐ {rating}" if rating else ""
 
         lines.append(
             f"<b>{i}.</b> {company} {rating_text}\n"
             f"   👤 {name}\n"
-            f"   📞 <a href='tel:{phone_link}'>{phone}</a>\n"
+            f"   📞 {phone}\n"
             f"   💰 {price}\n"
             f"   💬 {note}"
         )
@@ -377,12 +402,36 @@ async def show_responses(callback: CallbackQuery):
         contact = firm.get("Contact", {})
 
         company = firm.get("FullFirmName") or r.get("FirmName") or "—"
+
+        # 👉 получаем нормальный рейтинг через API
         rating = firm.get("TotalScore")
 
-        name = contact.get("Name") or "—"
-        phone = contact.get("Mobile") or contact.get("Telephone") or "—"
+        if rating is None:
+            rating_text = ""
+        else:
+            if rating >= 0:
+                rating_text = f"⭐ {rating:.1f}"
+            else:
+                rating_text = f"🔴 {-rating:.1f}"
 
-        phone_link = phone.replace(" ", "").replace("(", "").replace(")", "").replace("-", "")
+        name = contact.get("Name") or "—"
+        phone_raw = contact.get("Mobile") or contact.get("Telephone") or ""
+
+        phone_clean = (
+            phone_raw.replace(" ", "")
+            .replace("(", "")
+            .replace(")", "")
+            .replace("-", "")
+            .replace("+", "")  # 🔥 ВОТ ЭТО ВАЖНО
+        )
+
+        if phone_clean.startswith("8"):
+            phone_clean = "7" + phone_clean[1:]
+
+        if phone_clean:
+            phone = f"+{phone_clean}"
+        else:
+            phone = "—"
 
         # 💰 СТАВКА
         nds_price = r.get("NdsPrice", 0)
@@ -394,17 +443,17 @@ async def show_responses(callback: CallbackQuery):
         elif not_nds_price and not_nds_price > 0:
             price = f"{int(not_nds_price):,} ₽ (без НДС)"
         elif price_value and price_value > 0:
-            price = f"{int(price_value):,} ₽"
+            price = f"{int(price_value):,} ₽ (без НДС)"
         else:
             price = "—"
 
         note = r.get("Note") or "—"
-        rating_text = f"⭐ {rating}" if rating else ""
+        # rating_text = f"⭐ {rating}" if rating else ""
 
         lines.append(
             f"<b>{i}.</b> {company} {rating_text}\n"
             f"   👤 {name}\n"
-            f"   📞 <a href='tel:{phone_link}'>{phone}</a>\n"
+            f"   📞 {phone}\n"
             f"   💰 {price}\n"
             f"   💬 {note}"
         )
@@ -446,12 +495,36 @@ async def all_responses(callback: CallbackQuery):
         contact = firm.get("Contact", {})
 
         company = firm.get("FullFirmName") or r.get("FirmName") or "—"
+
+        # 👉 получаем нормальный рейтинг через API
         rating = firm.get("TotalScore")
 
-        name = contact.get("Name") or "—"
-        phone = contact.get("Mobile") or contact.get("Telephone") or "—"
+        if rating is None:
+            rating_text = ""
+        else:
+            if rating >= 0:
+                rating_text = f"⭐ {rating:.1f}"
+            else:
+                rating_text = f"🔴 {-rating:.1f}"
 
-        phone_link = phone.replace(" ", "").replace("(", "").replace(")", "").replace("-", "")
+        name = contact.get("Name") or "—"
+        phone_raw = contact.get("Mobile") or contact.get("Telephone") or ""
+
+        phone_clean = (
+            phone_raw.replace(" ", "")
+            .replace("(", "")
+            .replace(")", "")
+            .replace("-", "")
+            .replace("+", "")  # 🔥 ВОТ ЭТО ВАЖНО
+        )
+
+        if phone_clean.startswith("8"):
+            phone_clean = "7" + phone_clean[1:]
+
+        if phone_clean:
+            phone = f"+{phone_clean}"
+        else:
+            phone = "—"
 
         # 💰 СТАВКА
         nds_price = r.get("NdsPrice", 0)
@@ -463,17 +536,17 @@ async def all_responses(callback: CallbackQuery):
         elif not_nds_price and not_nds_price > 0:
             price = f"{int(not_nds_price):,} ₽ (без НДС)"
         elif price_value and price_value > 0:
-            price = f"{int(price_value):,} ₽"
+            price = f"{int(price_value):,} ₽ (без НДС)"
         else:
             price = "—"
 
         note = r.get("Note") or "—"
-        rating_text = f"⭐ {rating}" if rating else ""
+        # rating_text = f"⭐ {rating}" if rating else ""
 
         lines.append(
             f"<b>{i}.</b> {company} {rating_text}\n"
             f"   👤 {name}\n"
-            f"   📞 <a href='tel:{phone_link}'>{phone}</a>\n"
+            f"   📞 {phone}\n"
             f"   💰 {price}\n"
             f"   💬 {note}"
         )

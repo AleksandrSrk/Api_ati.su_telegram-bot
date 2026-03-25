@@ -292,3 +292,23 @@ async def get_new_responses(manager_key: str, date_from: str) -> list:
         return data
 
     return data.get("responses") or []
+
+async def get_firm_rating(manager_key: str, firm_id: int, contact_id: int):
+    url = f"{ATI_BASE_URL}/v1.0/firms/{firm_id}/contacts/{contact_id}/summary"
+
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            response = await client.get(url, headers=get_headers(manager_key))
+    except httpx.RequestError as e:
+        print(f"[ATI] rating error: {e}")
+        return None
+
+    if response.status_code != 200:
+        print(f"[ATI] rating status: {response.status_code}")
+        return None
+
+    data = await safe_json(response)
+    if not data:
+        return None
+
+    return data.get("score")
