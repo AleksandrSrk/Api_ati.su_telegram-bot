@@ -230,37 +230,6 @@ async def renew_load(manager_key: str, load_id: str) -> dict:
 # Новые отклики
 # =============================================
 
-async def get_new_responses(manager_key: str, date_from: str) -> list:
-    url = f"{ATI_BASE_URL}/v1.0/loads/new/responses"
-
-    params = {
-        "dateFrom": date_from
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-            response = await client.get(
-                url,
-                headers=get_headers(manager_key),
-                params=params
-            )
-    except httpx.RequestError as e:
-        print(f"[ATI] ошибка new_responses: {e}")
-        return []
-
-    if response.status_code != 200:
-        print(f"[ATI] new_responses status: {response.status_code}")
-        return []
-
-    data = await safe_json(response)
-    if not data:
-        return []
-
-    if isinstance(data, list):
-        return data
-
-    return data.get("responses") or []
-
 
 async def get_new_responses(manager_key: str, date_from: str) -> list:
     url = f"{ATI_BASE_URL}/v1.0/loads/new/responses"

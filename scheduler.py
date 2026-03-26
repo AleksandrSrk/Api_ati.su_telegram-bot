@@ -38,7 +38,6 @@ async def update_loads_job(manager_key: str):
     for load_raw in loads_raw:
         load = parse_load(load_raw)
 
-        # ❌ если нельзя обновить — возвращаем причину
         if not load["can_renew"]:
             results.append({
                 "success": False,
@@ -50,7 +49,6 @@ async def update_loads_job(manager_key: str):
             })
             continue
 
-        # ✅ обновляем
         result = await renew_load(manager_key, load["id"])
 
         result.update({
@@ -69,30 +67,27 @@ async def update_loads_job(manager_key: str):
 
 
 # =============================================
-# ⚡ НОВЫЕ ОТКЛИКИ (реалтайм через API)
+# ⚡ НОВЫЕ ОТКЛИКИ
 # =============================================
 async def check_new_responses_job(manager_key: str):
 
-    # когда последний раз проверяли
     last_check = get_last_response_check(manager_key)
 
-    # если первый запуск — берем последние 30 сек
     if not last_check:
-        last_check = datetime.utcnow() - timedelta(seconds=30)
+        last_check = datetime.utcnow() - timedelta(minutes=10)
 
     date_from = last_check.isoformat() + "Z"
 
     responses = await get_new_responses(manager_key, date_from)
 
-    # если нет — просто обновляем время
     if not responses:
         set_last_response_check(manager_key, datetime.utcnow())
         return
 
-    # получаем грузы чтобы сопоставить
+    # 👉 получаем только свои грузы
     loads_raw = await get_my_loads(manager_key)
-    loads_map = {}
 
+    loads_map = {}
     for l in loads_raw:
         parsed = parse_load(l)
         loads_map[str(parsed["id"])] = parsed
@@ -100,32 +95,31 @@ async def check_new_responses_job(manager_key: str):
     from telegram_bot import notify_new_response
 
     for r in responses:
-
-        # пропускаем устаревшие
-        if r.get("IsOutdated"):
-            continue
+        print("👉 NEW RESPONSE:", r.get("ResponseId"), r.get("LoadId"))
 
         load_id = str(r.get("LoadId"))
-        load = loads_map.get(load_id)
 
-        if not load:
+        # ❗ ключевая проверка — только свои грузы
+        if load_id not in loads_map:
+            print(f"⛔ Пропуск: груз {load_id} не принадлежит {manager_key}")
             continue
 
-        # отправляем сразу 1 отклик
+        load = loads_map[load_id]
+
+        print("🔥 SENDING TO TELEGRAM", manager_key)
+
         await notify_new_response(manager_key, load, [r])
 
-    # обновляем время последней проверки
     set_last_response_check(manager_key, datetime.utcnow())
 
 
 # =============================================
-# 🚀 ЗАПУСК ПЛАНИРОВЩИКА
+# 🚀 ЗАПУСК
 # =============================================
 def start_scheduler():
 
     for manager_key in MANAGERS.keys():
 
-        # автообновление грузов (раз в час)
         scheduler.add_job(
             update_loads_job,
             trigger="interval",
@@ -135,11 +129,10 @@ def start_scheduler():
             next_run_time=datetime.now() + timedelta(hours=1),
         )
 
-        # ⚡ проверка новых откликов (каждые 30 сек)
         scheduler.add_job(
             check_new_responses_job,
             trigger="interval",
-            seconds=30,
+            seconds=10,
             args=[manager_key],
             id=f"responses_{manager_key}",
             next_run_time=datetime.now() + timedelta(seconds=10),
