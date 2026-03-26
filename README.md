@@ -226,10 +226,10 @@ cp .env.example .env
 ## 📸 Screenshots
 
 ### 🔔 Новый отклик
-![New Response](screenshots/new_response.png)
+![New Response](screenshots/new_response.jpg)
 
 ### 💬 Список откликов
-![Responses](screenshots/responses_list.png)
+![Responses](screenshots/responses_list.jpg)
 
 ### 📋 Мои грузы
-![Loads](screenshots/loads_list.png)
+![Loads](screenshots/loads_list.jpg)
