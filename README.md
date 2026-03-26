@@ -221,8 +221,7 @@ ATI API возвращает цену в разных полях:
 
 ```bash
 cp .env.example .env
-
----
+```
 
 ## 📸 Screenshots
 
