@@ -12,11 +12,13 @@ from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_IDS, MANAGERS
 from state import (
     is_auto_update_enabled, set_auto_update,
     get_last_update_time,
-    get_active_manager, set_active_manager,
 )
+from config import USERS
 from ati_client import get_my_loads, get_load_responses, renew_load, parse_load
 from ati_client import delete_load
 
+def get_manager_by_user(user_id: int):
+    return USERS.get(user_id)
 
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
@@ -143,18 +145,8 @@ def main_keyboard(manager_key: str):
         keyboard=[
             [KeyboardButton(text="📋 Мои грузы")],
             [KeyboardButton(text="Автообновление: ВКЛ" if auto else "Автообновление: ВЫКЛ")],
-            [KeyboardButton(text="👤 Сменить менеджера")],
         ],
         resize_keyboard=True
-    )
-
-
-def managers_keyboard():
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text=v["name"], callback_data=f"m_{k}")]
-            for k, v in MANAGERS.items()
-        ]
     )
 
 
@@ -164,21 +156,21 @@ def managers_keyboard():
 
 @dp.message(Command("start"))
 async def start(message: Message):
-    await message.answer("Выбери менеджера", reply_markup=managers_keyboard())
+    manager = get_manager_by_user(message.from_user.id)
 
-@dp.message(F.text.contains("Сменить менеджера"))
-async def change_manager(message: Message):
-    await message.answer("Выбери менеджера", reply_markup=managers_keyboard())
+    if not manager:
+        await message.answer("❌ Нет доступа")
+        return
 
-@dp.callback_query(F.data.startswith("m_"))
-async def select_manager(callback: CallbackQuery):
-    await callback.answer("Загружаю...")
-    key = callback.data.replace("m_", "")
-    set_active_manager(callback.message.chat.id, key)
+    manager_data = MANAGERS.get(manager)
 
-    await callback.message.answer(
-        f"Менеджер: {MANAGERS[key]['name']}",
-        reply_markup=main_keyboard(key)
+    if not manager_data:
+        await message.answer("❌ Ошибка конфигурации")
+        return
+
+    await message.answer(
+        f"✅ Вы авторизованы как: {manager_data['name']}",
+        reply_markup=main_keyboard(manager)
     )
 
 
@@ -191,9 +183,9 @@ async def archive_load_handler(callback: CallbackQuery):
     await callback.answer("Убираем в архив...")
 
     load_id = callback.data.replace("archive_", "")
-    manager = get_active_manager(callback.message.chat.id)
+    manager = get_manager_by_user(callback.from_user.id)
     if not manager:
-        await callback.message.answer("Сначала выбери менеджера")
+        await callback.message.answer("❌ Нет доступа")
         return
 
     result = await delete_load(manager, load_id)
@@ -211,9 +203,9 @@ async def archive_load_handler(callback: CallbackQuery):
 @dp.message(F.text == "📋 Мои грузы")
 async def loads_handler(message: Message):
 
-    manager = get_active_manager(message.chat.id)
+    manager = get_manager_by_user(message.from_user.id)
     if not manager:
-        await message.answer("Сначала выбери менеджера")
+        await message.answer("❌ Нет доступа")
         return
 
     loads = await get_my_loads(manager)
@@ -262,8 +254,9 @@ async def loads_handler(message: Message):
 @dp.message(F.text.startswith("Автообновление"))
 async def toggle_auto(message: Message):
 
-    manager = get_active_manager(message.chat.id)
+    manager = get_manager_by_user(message.from_user.id)
     if not manager:
+        await message.answer("❌ Нет доступа")
         return
 
     current = is_auto_update_enabled(manager)
@@ -282,8 +275,9 @@ async def toggle_auto(message: Message):
 @dp.message(F.text == "⏱ До обновления")
 async def next_update(message: Message):
 
-    manager = get_active_manager(message.chat.id)
+    manager = get_manager_by_user(message.from_user.id)
     if not manager:
+        await message.answer("❌ Нет доступа")
         return
 
     last = get_last_update_time(manager)
@@ -334,9 +328,9 @@ async def show_responses(callback: CallbackQuery):
     await callback.answer("Загружаю...")
 
     load_id = callback.data.replace("responses_", "")
-    manager = get_active_manager(callback.message.chat.id)
+    manager = get_manager_by_user(callback.from_user.id)
     if not manager:
-        await callback.message.answer("Сначала выбери менеджера")
+        await callback.message.answer("❌ Нет доступа")
         return
 
     responses = await get_load_responses(manager, load_id)
@@ -363,9 +357,9 @@ async def all_responses(callback: CallbackQuery):
     await callback.answer("Загружаю...")
 
     load_id = callback.data.replace("all_", "")
-    manager = get_active_manager(callback.message.chat.id)
+    manager = get_manager_by_user(callback.from_user.id)
     if not manager:
-        await callback.message.answer("Сначала выбери менеджера")
+        await callback.message.answer("❌ Нет доступа")
         return
 
     responses = await get_load_responses(manager, load_id)
@@ -391,9 +385,9 @@ async def renew_one(callback: CallbackQuery):
     await callback.answer("Проверяю...")
 
     load_id = callback.data.replace("renew_", "")
-    manager = get_active_manager(callback.message.chat.id)
+    manager = get_manager_by_user(callback.from_user.id)
     if not manager:
-        await callback.message.answer("Сначала выбери менеджера")
+        await callback.message.answer("❌ Нет доступа")
         return
 
     # 👉 получаем все грузы, чтобы найти нужный
@@ -434,6 +428,10 @@ async def renew_one(callback: CallbackQuery):
 # =========================================================
 @dp.message()
 async def debug_handler(message: Message):
-        print("UNKNOWN MESSAGE:", message.text)   
+    manager = get_manager_by_user(message.from_user.id)
+    if not manager:
+        return
+
+    print("UNKNOWN MESSAGE:", message.text)
 
 

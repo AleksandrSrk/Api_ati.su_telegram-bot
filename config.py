@@ -35,6 +35,10 @@ TELEGRAM_CHAT_IDS = {
     "alexander": int(os.getenv("TELEGRAM_CHAT_ID_ALEXANDER", "0") or 0),
     "igor": int(os.getenv("TELEGRAM_CHAT_ID_IGOR", "0") or 0),
 }
+# AUTH (используем те же chat_id как user_id)
+USERS = {
+    v: k for k, v in TELEGRAM_CHAT_IDS.items()
+}
 
 # =============================================
 # Настройки планировщика
@@ -42,3 +46,5 @@ TELEGRAM_CHAT_IDS = {
 
 UPDATE_INTERVAL_MINUTES = int(os.getenv("UPDATE_INTERVAL_MINUTES", "60"))
 RESPONSES_CHECK_MINUTES = int(os.getenv("RESPONSES_CHECK_MINUTES", "5"))
+
+
