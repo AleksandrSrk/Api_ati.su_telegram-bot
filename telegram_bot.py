@@ -20,7 +20,18 @@ from ati_client import delete_load
 def get_manager_by_user(user_id: int):
     return USERS.get(user_id)
 
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
+import os
+
+PROXY_URL = os.getenv("PROXY_URL")
+
+if PROXY_URL:
+    bot = Bot(
+        token=TELEGRAM_BOT_TOKEN,
+        proxy=PROXY_URL
+    )
+else:
+    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+
 dp = Dispatcher(storage=MemoryStorage())
 
 
