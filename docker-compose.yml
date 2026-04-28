@@ -5,5 +5,6 @@ services:
     build: .
     container_name: ati-bot
     restart: always
+    network_mode: host
     env_file:
       - .env
