@@ -16,6 +16,7 @@ from state import (
 from config import USERS
 from ati_client import get_my_loads, get_load_responses, renew_load, parse_load
 from ati_client import delete_load
+from aiogram.client.session.aiohttp import AiohttpSession
 
 def get_manager_by_user(user_id: int):
     return USERS.get(user_id)
@@ -25,9 +26,14 @@ import os
 PROXY_URL = os.getenv("PROXY_URL")
 
 if PROXY_URL:
+    session = AiohttpSession(
+        proxy=PROXY_URL,
+        timeout=60
+    )
+
     bot = Bot(
         token=TELEGRAM_BOT_TOKEN,
-        proxy=PROXY_URL
+        session=session
     )
 else:
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
