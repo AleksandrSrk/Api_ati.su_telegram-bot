@@ -26,9 +26,15 @@ import os
 PROXY_URL = os.getenv("PROXY_URL")
 
 if PROXY_URL:
+    from aiogram.client.session.aiohttp import AiohttpSession
+    from aiohttp_socks import ProxyConnector
+
+    connector = ProxyConnector.from_url(PROXY_URL)
+    session = AiohttpSession(connector=connector)
+
     bot = Bot(
         token=TELEGRAM_BOT_TOKEN,
-        proxy=PROXY_URL
+        session=session
     )
 else:
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
