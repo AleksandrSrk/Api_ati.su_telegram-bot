@@ -25,18 +25,10 @@ import os
 
 PROXY_URL = os.getenv("PROXY_URL")
 
-if PROXY_URL:
-    session = AiohttpSession(
-        proxy=PROXY_URL,
-        timeout=60
-    )
-
-    bot = Bot(
-        token=TELEGRAM_BOT_TOKEN,
-        session=session
-    )
-else:
-    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+bot = Bot(
+    token=TELEGRAM_BOT_TOKEN,
+    proxy=PROXY_URL
+)
 
 dp = Dispatcher(storage=MemoryStorage())
 
