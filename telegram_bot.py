@@ -30,7 +30,9 @@ if PROXY_URL:
     from aiohttp_socks import ProxyConnector
 
     connector = ProxyConnector.from_url(PROXY_URL)
-    session = AiohttpSession(connector=connector)
+
+    session = AiohttpSession()
+    session._connector = connector  # 👈 ВАЖНО
 
     bot = Bot(
         token=TELEGRAM_BOT_TOKEN,
