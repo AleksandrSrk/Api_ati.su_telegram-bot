@@ -16,11 +16,18 @@ logging.basicConfig(
 
 async def main():
     print("🚀 Запуск бота...")
+
+    from telegram_bot import PROXY_URL
+    print("PROXY:", PROXY_URL)
+
+    print("👉 Проверяю Telegram...")
+    me = await bot.me()
+    print("✅ BOT:", me.username)
+
     start_scheduler()
     print("✅ Планировщик запущен")
-    print("✅ Бот запущен и ожидает сообщений")
-    await dp.start_polling(bot)
 
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
