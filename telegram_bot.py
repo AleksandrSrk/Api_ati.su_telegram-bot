@@ -164,7 +164,7 @@ def main_keyboard(manager_key: str):
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="📋 Мои грузы")],
-            [KeyboardButton(text="Автообновление: ВКЛ" if auto else "Автообновление: ВЫКЛ")],
+            [KeyboardButton(text="Выключить автообновление" if auto else "Включить автообновление")],
         ],
         resize_keyboard=True
     )
@@ -271,7 +271,7 @@ async def loads_handler(message: Message):
 # АВТООБНОВЛЕНИЕ
 # =========================================================
 
-@dp.message(F.text.startswith("Автообновление"))
+@dp.message(F.text.in_({"Включить автообновление", "Выключить автообновление"}))
 async def toggle_auto(message: Message):
 
     manager = get_manager_by_user(message.from_user.id)
@@ -280,12 +280,18 @@ async def toggle_auto(message: Message):
         return
 
     current = is_auto_update_enabled(manager)
-    set_auto_update(manager, not current)
+    new_state = not current
+    set_auto_update(manager, new_state)
 
     await message.answer(
-        f"Автообновление {'ВКЛЮЧЕНО' if not current else 'ВЫКЛЮЧЕНО'}",
+        f"Автообновление {'ВКЛЮЧЕНО' if new_state else 'ВЫКЛЮЧЕНО'}",
         reply_markup=main_keyboard(manager)
     )
+
+    if new_state:
+        await message.answer("Запускаю обновление грузов...")
+        from scheduler import update_loads_job
+        await update_loads_job(manager)
 
 
 # =========================================================
@@ -416,11 +422,13 @@ async def renew_one(callback: CallbackQuery):
     # 👉 если можно — обновляем
     result = await renew_load(manager, load_id)
 
+    load_line = f"{load_data['from_city']} → {load_data['to_city']}"
+
     if result.get("success"):
-        await callback.message.answer("✅ Груз обновлён")
+        await callback.message.answer(f"✅ Груз обновлён\n{load_line}")
     else:
         reason = result.get("reason", "Ошибка обновления")
-        await callback.message.answer(f"❌ {reason}")
+        await callback.message.answer(f"❌ {load_line}\n{reason}")
 
 # =========================================================
 # РЕЗУЛЬТАТ АВТООБНОВЛЕНИЯ
