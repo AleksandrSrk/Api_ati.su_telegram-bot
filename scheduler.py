@@ -1,7 +1,7 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime, timedelta
 
-from config import MANAGERS, UPDATE_INTERVAL_MINUTES
+from config import MANAGERS, UPDATE_INTERVAL_MINUTES, RESPONSES_CHECK_MINUTES
 from state import (
     is_auto_update_enabled,
     set_last_update_time,
@@ -132,10 +132,10 @@ def start_scheduler():
         scheduler.add_job(
             check_new_responses_job,
             trigger="interval",
-            seconds=10,
+            minutes=RESPONSES_CHECK_MINUTES,
             args=[manager_key],
             id=f"responses_{manager_key}",
-            next_run_time=datetime.now() + timedelta(seconds=10),
+            next_run_time=datetime.now() + timedelta(minutes=RESPONSES_CHECK_MINUTES),
         )
 
     scheduler.start()

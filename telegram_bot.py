@@ -8,7 +8,7 @@ from aiogram.types import (
 from aiogram.fsm.storage.memory import MemoryStorage
 from datetime import datetime, timedelta
 
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_IDS, MANAGERS
+from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_IDS, MANAGERS, UPDATE_INTERVAL_MINUTES
 from state import (
     is_auto_update_enabled, set_auto_update,
     get_last_update_time,
@@ -306,7 +306,7 @@ async def next_update(message: Message):
         await message.answer("Ещё не было обновлений")
         return
 
-    mins = int(((last + timedelta(hours=1)) - datetime.now()).total_seconds() // 60)
+    mins = int(((last + timedelta(minutes=UPDATE_INTERVAL_MINUTES)) - datetime.now()).total_seconds() // 60)
     await message.answer(f"До обновления: {mins} мин")
 
 
@@ -340,14 +340,10 @@ async def notify_new_response(manager_key: str, load: dict, new_responses: list)
 
 
 # =========================================================
-# ОТКЛИКИ
+# ОТКЛИКИ (общий хелпер)
 # =========================================================
 
-@dp.callback_query(F.data.startswith("responses_"))
-async def show_responses(callback: CallbackQuery):
-    await callback.answer("Загружаю...")
-
-    load_id = callback.data.replace("responses_", "")
+async def _send_responses(callback: CallbackQuery, load_id: str, title: str):
     manager = get_manager_by_user(callback.from_user.id)
     if not manager:
         await callback.message.answer("❌ Нет доступа")
@@ -359,7 +355,7 @@ async def show_responses(callback: CallbackQuery):
         await callback.message.answer("Откликов нет")
         return
 
-    lines = build_responses_lines(responses, "📋 Отклики:")
+    lines = build_responses_lines(responses, title)
 
     if len(lines) == 1:
         await callback.message.answer("Нет актуальных откликов")
@@ -368,33 +364,16 @@ async def show_responses(callback: CallbackQuery):
     await callback.message.answer("\n".join(lines), parse_mode="HTML")
 
 
-# =========================================================
-# ВСЕ ОТКЛИКИ
-# =========================================================
+@dp.callback_query(F.data.startswith("responses_"))
+async def show_responses(callback: CallbackQuery):
+    await callback.answer("Загружаю...")
+    await _send_responses(callback, callback.data.replace("responses_", ""), "📋 Отклики:")
+
 
 @dp.callback_query(F.data.startswith("all_"))
 async def all_responses(callback: CallbackQuery):
     await callback.answer("Загружаю...")
-
-    load_id = callback.data.replace("all_", "")
-    manager = get_manager_by_user(callback.from_user.id)
-    if not manager:
-        await callback.message.answer("❌ Нет доступа")
-        return
-
-    responses = await get_load_responses(manager, load_id)
-
-    if not responses:
-        await callback.message.answer("Нет откликов")
-        return
-
-    lines = build_responses_lines(responses, "📋 Все отклики:")
-
-    if len(lines) == 1:
-        await callback.message.answer("Нет актуальных откликов")
-        return
-
-    await callback.message.answer("\n".join(lines), parse_mode="HTML")
+    await _send_responses(callback, callback.data.replace("all_", ""), "📋 Все отклики:")
 
 # =========================================================
 # ОБНОВИТЬ ВРУЧНУЮ
@@ -442,6 +421,32 @@ async def renew_one(callback: CallbackQuery):
     else:
         reason = result.get("reason", "Ошибка обновления")
         await callback.message.answer(f"❌ {reason}")
+
+# =========================================================
+# РЕЗУЛЬТАТ АВТООБНОВЛЕНИЯ
+# =========================================================
+
+async def notify_update_result(manager_key: str, results: list):
+    chat_id = TELEGRAM_CHAT_IDS.get(manager_key)
+    if not chat_id or not results:
+        return
+
+    success = [r for r in results if r.get("success")]
+    failed = [r for r in results if not r.get("success")]
+
+    lines = ["🔄 Автообновление грузов"]
+
+    for r in success:
+        weight = f"{r['weight']}т" if r["weight"] != "—" else "—"
+        lines.append(f"✅ {r['from_city']} → {r['to_city']} ({weight})")
+
+    for r in failed:
+        weight = f"{r['weight']}т" if r["weight"] != "—" else "—"
+        reason = r.get("reason") or "нельзя обновить"
+        lines.append(f"⏳ {r['from_city']} → {r['to_city']} ({weight}) — {reason}")
+
+    await bot.send_message(chat_id, "\n".join(lines))
+
 
 # =========================================================
 # ПРИЧИНА НЕИСПРАВНОСТИ
